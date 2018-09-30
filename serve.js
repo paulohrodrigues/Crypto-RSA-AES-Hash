@@ -12,6 +12,21 @@ var a = new Protocolo({
   }
 });
 
+// a.setAlgoritmos(
+//   {"cesar":
+//     {
+//       "cry":(text,pwd)=>{
+//         return new Buffer(text).toString("base64");
+//       },"de":(text,pwd)=>{
+//         // console.log("aqui");
+//         // console.log(text);
+//         // console.log(new Buffer(JSON.stringify(text),"base64").toString("ascii"));
+//         return new Buffer(JSON.stringify(text),"base64").toString("ascii");
+//       }
+//     }
+//   }
+// );
+
 var stdin = process.openStdin();
 
 stdin.addListener("data", function(d) {

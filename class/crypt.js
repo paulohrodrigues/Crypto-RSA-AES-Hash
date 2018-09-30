@@ -2,9 +2,7 @@
 module.exports = class Crypt{
 
     constructor(name){
-
         this.fs                  = require('fs');
-
         this.certificado        = {};
         this.nonce              = Math.floor((Math.random() * 100000000) + 10000000);
         this.keyPrivate         = this.fs.readFileSync('./keys/'+name+'/chave.key');
@@ -15,9 +13,39 @@ module.exports = class Crypt{
         this.listaAlgoritmos    = {
             "simetrico":["aes"],
             "assimetrico":["rsa"],
-            "hash":["md5"]
+            "hash":["md5,sha256"]
         };
+        this.algoritimosQueVaoSerUsados={
+            hash:"md5",
+            simetrico:"aes",
+            assimetrico:"rsa"
+        }
+
+        this.algoritmos={
+            "simetrico":{"aes":{"cry":this.cryptSim,"de":this.decryptSim}},
+            "assimetrico":{"rsa":{"cry":this.cryptAss,"de":this.decryptAss}},
+            "hash":{"md5":{"cry":this.hash},"sha256":{"cry":this.hash}}
+        }
+
     }
+
+    setAlgoritmos(simetrico=null,assimetrico=null,hash=null){
+        if(hash!=null){
+            this.listaAlgoritmos["hash"]   = Object.keys(hash);
+            this.algoritmos["hash"]        = hash;
+        }
+        if(simetrico!=null){
+            this.listaAlgoritmos["simetrico"]   = Object.keys(simetrico);
+            this.algoritmos["simetrico"]        = simetrico;
+            // console.log(this.listaAlgoritmos["simetrico"]);
+
+        }
+        if(assimetrico!=null){
+            this.listaAlgoritmos["assimetrico"]   = Object.keys(assimetrico);
+            this.algoritmos["assimetrico"]        = assimetrico;
+        }
+    }
+
 
     certifica(ip,porta,key_pub){
         var certificado = {};
@@ -30,10 +58,10 @@ module.exports = class Crypt{
         return this.certificado;
     }
 
-    CAAssina(certificado){
+    CAAssina(certificado,hash){
         this.certificado = certificado;
         this.certificado["assinatura"] = this.cryptAss(
-            new Buffer(this.hash(JSON.stringify(certificado),"md5")),
+            new Buffer(this.hash(JSON.stringify(certificado),hash)),
             "priv",
             this.fs.readFileSync('./keys/CA/chave.key')
         );
@@ -94,14 +122,13 @@ module.exports = class Crypt{
         return encrypted.toString();
     }
     decryptSim(text,pwd,type="aes"){
-        
+        // console.log(125);
+        // console.log(new Buffer(JSON.stringify(text)).toString("utf8"));
         var node_cryptojs   = require('node-cryptojs-aes');
         var CryptoJS        = node_cryptojs.CryptoJS;
         var JsonFormatter   = node_cryptojs.JsonFormatter;
-        var decrypted = CryptoJS.AES.decrypt(text, pwd, { format: JsonFormatter });
-        
+        var decrypted = CryptoJS.AES.decrypt(JSON.stringify(text), pwd, { format: JsonFormatter });
         return CryptoJS.enc.Utf8.stringify(decrypted);
-
     }
 
     cryptAss(text,type_key,key=null,type="rsa"){
