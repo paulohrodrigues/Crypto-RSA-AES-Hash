@@ -19,6 +19,7 @@ module.exports = class Protocolo{
             type:"connection-1"
         }
         this.recebe();
+        this.crypt.CAAssina(this.crypt.certifica(comunicantes.eu.host,comunicantes.eu.port,this.crypt.getChave("pub")));
     }
 
     verifica(){
@@ -41,7 +42,8 @@ module.exports = class Protocolo{
             if(this.ativo==true){
                 this.client.write(this.crypt.cryptSim(JSON.stringify({
                     data:mensagem,
-                    type:"mensagem"
+                    type:"mensagem",
+                    r:parseInt(this.comunicantes.ele["r"])+1
                 }),this.chave_simetrica_que_vai_ser_usada ));
             }else{
                 this.buffer = mensagem;
@@ -106,7 +108,7 @@ module.exports = class Protocolo{
                 simetrica,
                 assimetrica,
                 type,
-                chave_pub:this.crypt.getChave("pub")
+                certificado:this.crypt.getCertificado()
             };
             
             this.enviarMensagemPadrao(acordo);
@@ -118,26 +120,70 @@ module.exports = class Protocolo{
                 console.log("Não foi possivel fazer a conexão");
                 return false;
             }else{
+                // this.crypt.cryptAss(this.chave_simetrica_que_vai_ser_usada,"pub",new Buffer(data.chave_pub))
+
+                var resultCertificadoRecebido = this.crypt.verificaAssinaturaCA(data.certificado,this.comunicantes.ele.host,this.comunicantes.ele.port);
+                if(resultCertificadoRecebido.status==false){
+                    console.log("Não foi possivel Connectar");
+                    return false;
+                }
+
                 let acordo = {
-                    simetrica: this.crypt.cryptAss(this.chave_simetrica_que_vai_ser_usada,"pub",new Buffer(data.chave_pub)),
-                    type:"end",
-                    data:this.buffer
+                    certificado: this.crypt.getCertificado(),
+                    type:"ok-2",
+                    data:this.buffer,
+                    r:this.crypt.cryptAss(this.crypt.nonce.toString(),"pub",new Buffer(data.certificado["key_pub"]))
                 };
-                this.comunicantes.ele["chave_pub"]=data.chave_pub;
-            
+                this.comunicantes.ele["certificado"]=data.certificado;
+                this.enviarMensagemPadrao(acordo);
+                // this.ativo=true;
+                // console.log("Pronto para Trocar Mensagem");
+                return false;
+            }
+        }
+
+
+        if(data.type==="ok-2"){
+            if(data.type=="erro"){
+                console.log("Não foi possivel fazer a conexão");
+                return false;
+            }else{
+                var resultCertificadoRecebido = this.crypt.verificaAssinaturaCA(data.certificado,this.comunicantes.ele.host,this.comunicantes.ele.port);
+                if(resultCertificadoRecebido.status==false){
+                    console.log("Não foi possivel Connectar");
+                    return false;
+                }
+
+                let acordo = {
+                    simetrica: this.crypt.cryptAss(JSON.stringify({"simetrica":this.chave_simetrica_que_vai_ser_usada,r:this.crypt.nonce}),"pub",new Buffer(data.certificado["key_pub"])),
+                    type:"end"
+                };
+                this.comunicantes.ele["certificado"]=data.certificado;
+                
+                this.comunicantes.ele["r"] = parseInt(this.crypt.decryptAss(new Buffer(data.r),"priv").toString());
+                
                 this.enviarMensagemPadrao(acordo);
                 this.ativo=true;
+                console.log(data.data);
                 console.log("Pronto para Trocar Mensagem");
                 return false;
             }
         }
+        
         if(data.type==="end"){
-            this.chave_simetrica_que_vai_ser_usada = this.crypt.decryptAss(new Buffer(data.simetrica),"priv");
+            var json = JSON.parse(this.crypt.decryptAss(new Buffer(data.simetrica),"priv").toString());
+            this.comunicantes.ele["r"] = json.r;
+            this.chave_simetrica_que_vai_ser_usada = json.simetrica;
             this.ativo=true;
-            console.log(data.data);
+            // console.log(data.data);
             console.log("Pronto para Trocar Mensagem");
             return false;
         }
+
+        // if(data.ct){
+        //     console.log("teste");
+        // }
+        // console.log(data);
         return true;
     }
 

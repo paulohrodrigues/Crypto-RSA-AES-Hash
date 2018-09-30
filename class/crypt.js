@@ -3,11 +3,12 @@ module.exports = class Crypt{
 
     constructor(name){
 
-        let fs                  = require('fs');
+        this.fs                  = require('fs');
 
-        this.r                  = Math.floor((Math.random() * 100000000) + 10000000);
-        this.keyPrivate         = fs.readFileSync('./keys/'+name+'/chave.key');
-        this.keyPublic          = fs.readFileSync('./keys/'+name+'/chave.pub');
+        this.certificado        = {};
+        this.nonce              = Math.floor((Math.random() * 100000000) + 10000000);
+        this.keyPrivate         = this.fs.readFileSync('./keys/'+name+'/chave.key');
+        this.keyPublic          = this.fs.readFileSync('./keys/'+name+'/chave.pub');
         this.crypto             = require('crypto');
         this.RSAKeyPub          = "";
         this.RSAKeyPriv         = "";
@@ -18,10 +19,57 @@ module.exports = class Crypt{
         };
     }
 
+    certifica(ip,porta,key_pub){
+        var certificado = {};
+        certificado["ip"]=ip;
+        certificado["porta"]=porta;
+        certificado["key_pub"]=key_pub;
+        return certificado;
+    }
+    getCertificado(){
+        return this.certificado;
+    }
+
+    CAAssina(certificado){
+        this.certificado = certificado;
+        this.certificado["assinatura"] = this.cryptAss(
+            new Buffer(this.hash(JSON.stringify(certificado),"md5")),
+            "priv",
+            this.fs.readFileSync('./keys/CA/chave.key')
+        );
+    }
+
+    getChavePubCA(){
+        return this.fs.readFileSync('./keys/CA/chave.pub');
+    }
+
     geraChaveSimetrica(){
         var r_pass          = this.crypto.randomBytes(128);
         var r_pass_base64   = r_pass.toString("base64");
         return r_pass_base64;
+    }
+
+    verificaAssinaturaCA(certificado,ip,port){
+
+        var assinatura = new Buffer(certificado["assinatura"]);
+        delete certificado["assinatura"];
+        
+        if( 
+            this.decryptAss(new Buffer(assinatura),"pub",this.getChavePubCA().toString()) === this.hash(JSON.stringify(certificado)) &&
+            certificado["ip"]===ip &&
+            certificado["porta"]===port
+        ){
+            console.log("Você é quem diz ser!");
+            return {
+                status:true,
+                public_key:certificado["key_pub"],
+
+            };
+        }
+        console.log("ERRO! Você não é quem diz ser!");
+        return {
+            status:false
+        };
     }
 
     getChave(type){
